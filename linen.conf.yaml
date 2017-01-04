@@ -1,0 +1,14 @@
+workspace: ~{HOME}
+program:
+log-dir: ~{PWD}/linen-logs
+clean-log-dir: true
+console-log-level: INFO
+linen-dir: ~{WORKSPACE}/linen
+logger-name:
+  ~(str:
+  - sut-
+  - ~$ git rev-parse --abbrev-ref HEAD
+env:
+  LINEN_DIR: ~{WORKSPACE}/linen
+merge-global-environment: true
+harvest:

@@ -1,0 +1,8 @@
+*.swp
+*.swo
+target/
+linen-logs/
+.lein-repl-history
+notes*
+test-data
+
