@@ -85,25 +85,22 @@
               (concat programs (reduce go programs (.listFiles f)))
               (let [dir (.getParentFile f)
                     files (.listFiles dir)
-                    program (get-file-by-name "program.yaml" files)
-                    config-profile-list (get-file-by-name "config-profiles.yaml" files)]
+                    program (get-file-by-name "program.yaml" files)]
                 (conj programs
-                      [dir program config-profile-list]))))
+                      [dir program]))))
           #{}
           (.listFiles f))]
-    (doseq [[parent program config-profile-list] programs]
+    (doseq [[parent program] programs]
       (let [data (-> program slurp yaml/parse-string)
             program-name (:name data)
-                         ;;(str (-> parent .getParentFile .getName)
-                         ;;     "."
-                         ;;     (.getName parent))
-            config-profiles (and config-profile-list
-                                 (-> config-profile-list slurp yaml/parse-string))]
+            documentation (:documentation data)
+            config-profiles (:config-profiles data)]
         (try
           (j/with-db-transaction [conn db-config]
             (j/insert! conn :program
               {:name program-name
-               :data data})
+               :data data
+               :documentation documentation})
             (doseq [cp config-profiles]
               (j/insert! conn :config_profile_program_map
                 {:program program-name
