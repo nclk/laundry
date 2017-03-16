@@ -57,8 +57,16 @@
         (try
           (j/with-db-transaction [conn db-config]
             (j/insert! conn rel
-              {:name nm
-               :data (-> m slurp yaml/parse-string)})
+              (let [contents (-> m slurp yaml/parse-string)
+                    prototype
+                    {:name nm
+                     :data (if (:data contents)
+                             (:data contents)
+                             contents)}]
+                (if (:documentation contents)
+                  (assoc prototype :documentation
+                         (:documentation contents))
+                  prototype)))
             (log :info (str "source \"" nm "\" inserted.")))
           (catch org.postgresql.util.PSQLException psqle
             (log :warn (str "source \""
@@ -86,8 +94,9 @@
               (let [dir (.getParentFile f)
                     files (.listFiles dir)
                     program (get-file-by-name "program.yaml" files)]
-                (conj programs
-                      [dir program]))))
+                (when program
+                  (conj programs
+                        [dir program])))))
           #{}
           (.listFiles f))]
     (doseq [[parent program] programs]
