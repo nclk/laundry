@@ -47,6 +47,12 @@
     (j/delete! conn :config_profile [])
     ))
 
+(defn maybe-column
+  [prototype col-name contents]
+  (if (col-name contents)
+    (assoc prototype col-name (col-name contents))
+    prototype))
+
 (defn migrate-dir [db-config rel dir]
   (let [sources (-> dir ;; e.g., "linen/modules"
                     clojure.java.io/resource
@@ -63,10 +69,9 @@
                      :data (if (:data contents)
                              (:data contents)
                              contents)}]
-                (if (:documentation contents)
-                  (assoc prototype :documentation
-                         (:documentation contents))
-                  prototype)))
+                (-> prototype
+                  (maybe-column :documentation contents)
+                  (maybe-column :meta contents))))
             (log :info (str "source \"" nm "\" inserted.")))
           (catch org.postgresql.util.PSQLException psqle
             (log :warn (str "source \""

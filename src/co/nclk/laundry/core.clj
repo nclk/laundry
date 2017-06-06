@@ -233,8 +233,7 @@
             (map (fn [[k v]]
                    [k (assoc v :href
                                (resource-uri
-                                 (-> request :scheme name)
-                                 (-> request :headers (get "host"))
+                                 request
                                  (str api-base (:context v) "/")))]))
             (into {}))]
       

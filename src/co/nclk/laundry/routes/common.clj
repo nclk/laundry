@@ -89,10 +89,12 @@
     (into {} (remove nil? params))))
 
 (defn resource-uri
-  [scheme host & [endpoint]]
-  (str (name scheme)
+  [request & [endpoint]]
+  (str (or (-> request :headers (get "x-original-protocol"))
+           (-> request :scheme name))
        "://"
-       host
+       (or (-> request :headers (get "x-original-host"))
+           (-> request :headers (get "host")))
        endpoint))
 
 (defn related-resources
@@ -106,17 +108,12 @@
                    [(first fks)
                     (map #(% resource) (drop 1 fks))])))]
     (assoc resource
-      :href (resource-uri (-> request :scheme name)
-                          (-> request :headers (get "host"))
-                          (format-fun ind-href))
+      :href (resource-uri request (format-fun ind-href))
       :related-resources
       (into {}
         (for [[relation fks] related]
           [relation
-           (resource-uri
-             (-> request :scheme name)
-             (-> request :headers (get "host"))
-             (format-fun fks))])))))
+           (resource-uri request (format-fun fks))])))))
  
 (defn method-handlers
   [request

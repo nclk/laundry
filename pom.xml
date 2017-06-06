@@ -3,7 +3,7 @@
   <groupId>co.nclk</groupId>
   <artifactId>laundry</artifactId>
   <packaging>jar</packaging>
-  <version>0.3.0-SNAPSHOT</version>
+  <version>0.3.0</version>
   <name>laundry</name>
   <description>FIXME: write description</description>
   <url>http://example.com/FIXME</url>
@@ -14,7 +14,7 @@
     </license>
   </licenses>
   <scm>
-    <tag>64ee632aed566f27dfd6656fc4e231961480bfdf
+    <tag>a4927cb739539066b485b7a04305254740cbbc6b
 </tag>
     <url/>
   </scm>
@@ -69,12 +69,12 @@
     <dependency>
       <groupId>co.nclk</groupId>
       <artifactId>linen</artifactId>
-      <version>2.0.0-SNAPSHOT</version>
+      <version>2.1.0</version>
     </dependency>
     <dependency>
       <groupId>co.nclk</groupId>
       <artifactId>clj-yaml</artifactId>
-      <version>0.1.0-SNAPSHOT</version>
+      <version>1.0.0</version>
     </dependency>
     <dependency>
       <groupId>org.fusesource.jansi</groupId>
