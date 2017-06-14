@@ -8,7 +8,8 @@ create table if not exists test_run (
 	status text not null default 'pending',
 	created timestamp without time zone default (
 		now() at time zone 'utc'
-	)
+	),
+	modified timestamp without time zone
 );
 
 create table if not exists checkpoint (

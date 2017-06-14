@@ -25,3 +25,9 @@ create trigger update_module_modified
 	for each row execute procedure
 		resource_updated();
 
+create trigger update_test_run_modified
+	before update
+	on test_run
+	for each row execute procedure
+		resource_updated();
+
