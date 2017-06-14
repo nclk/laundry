@@ -12,6 +12,12 @@ create table if not exists test_run (
 	modified timestamp without time zone
 );
 
+create trigger update_test_run_modified
+	before update
+	on test_run
+	for each row execute procedure
+		resource_updated();
+
 create table if not exists checkpoint (
 	id uuid not null primary key,
 	test_run_id uuid,
