@@ -8,15 +8,8 @@ create table if not exists test_run (
 	status text not null default 'pending',
 	created timestamp without time zone default (
 		now() at time zone 'utc'
-	),
-	modified timestamp without time zone
+	)
 );
-
-create trigger update_test_run_modified
-	before update
-	on test_run
-	for each row execute procedure
-		resource_updated();
 
 create table if not exists checkpoint (
 	id uuid not null primary key,
