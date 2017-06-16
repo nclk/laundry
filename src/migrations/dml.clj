@@ -72,9 +72,10 @@
                 (-> prototype
                   (maybe-column :documentation contents)
                   (maybe-column :meta contents))))
-            (log :info (str "source \"" nm "\" inserted.")))
+            (log :info (str (name rel) " \"" nm "\" inserted.")))
           (catch org.postgresql.util.PSQLException psqle
-            (log :warn (str "source \""
+            (log :warn (str (name rel)
+                            "\""
                             nm
                             "\" not inserted: " (.getMessage psqle)))))))))
 
@@ -95,7 +96,9 @@
         (reduce
           (fn go [programs f]
             (if (.isDirectory f)
-              (concat programs (reduce go programs (.listFiles f)))
+              (clojure.set/union
+                programs
+                (reduce go programs (.listFiles f)))
               (let [dir (.getParentFile f)
                     files (.listFiles dir)
                     program (get-file-by-name "program.yaml" files)]
@@ -104,6 +107,7 @@
                         [dir program])))))
           #{}
           (.listFiles f))]
+    ;;(println programs) (System/exit 0)
     (doseq [[parent program] programs]
       (let [data (-> program slurp yaml/parse-string)
             program-name (:name data)
@@ -115,10 +119,15 @@
               {:name program-name
                :data data
                :documentation documentation})
+            (log :info
+              (str "program " "\"" program-name "\" inserted."))
             (doseq [cp config-profiles]
               (j/insert! conn :config_profile_program_map
                 {:program program-name
-                 :config_profile cp})))
+                 :config_profile cp})
+              (log :info
+                (str "config_profile_program_map "
+                     "\"" program-name "/" cp "\" inserted."))))
           (catch org.postgresql.util.PSQLException psqle
             (log :warn (str "source \""
                             program-name
