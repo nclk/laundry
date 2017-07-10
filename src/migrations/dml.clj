@@ -61,22 +61,23 @@
     (doseq [m sources]
       (let [nm (-> m .getName (clojure.string/replace #".yaml$" ""))]
         (try
-          (j/with-db-transaction [conn db-config]
-            (j/insert! conn rel
-              (let [contents (-> m slurp yaml/parse-string)
-                    prototype
-                    {:name nm
-                     :data (if (:data contents)
-                             (:data contents)
-                             contents)}]
-                (-> prototype
-                  (maybe-column :documentation contents)
-                  (maybe-column :meta contents))))
-            (log :info (str (name rel) " \"" nm "\" inserted.")))
+          (doseq [contents (-> m slurp yaml/parse-all)]
+            (let [nm (or (:name contents) nm)]
+              (j/with-db-transaction [conn db-config]
+                (j/insert! conn rel
+                  (let [prototype
+                        {:name (or (:name contents) nm)
+                         :data (if (:data contents)
+                                 (:data contents)
+                                 contents)}]
+                    (-> prototype
+                      (maybe-column :documentation contents)
+                      (maybe-column :meta contents)))))
+              (log :info (str (name rel) " \"" nm "\" inserted."))))
           (catch org.postgresql.util.PSQLException psqle
             (log :warn (str (name rel)
-                            "\""
-                            nm
+                            " \""
+                            (-> m .getName)
                             "\" not inserted: " (.getMessage psqle)))))))))
 
 (defn get-file-by-name
