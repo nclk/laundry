@@ -37,6 +37,11 @@
                        :harvest (or hkeys [])
                        :log-checkpoints? true
                        :data-connector ctor
+                       :genv (atom
+                               (into {}
+                                 (for [[k v] (System/getenv)]
+                                   [(keyword k) v])))
+                       :merge-global-environment true
                        :program (:data program)}]
           (if (empty? args)
             config
@@ -48,7 +53,8 @@
                                      (-> args first :data)
                                      config))))))
         test-run-id (java.util.UUID/randomUUID)]
-    ;;(clojure.pprint/pprint config)
+    (println "Evaluated environment:")
+    (clojure.pprint/pprint config)
     (j/with-db-transaction [conn dbconfig]
       (j/insert! conn :test_run
         {:id test-run-id
