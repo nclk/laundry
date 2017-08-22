@@ -13,6 +13,13 @@
 
 (def dbconfig models/config)
 
+(def testrun-map
+  (atom {}))
+
+(defn remove-test! [id]
+  (swap! testrun-map
+    #(dissoc % id)))
+
 (defn handlerfn
   [r]
   (fn [s]
@@ -61,88 +68,103 @@
          :seed seed
          :program_name (:name program)
          :env (:env config)}))
-    ;;(log :checkpoint "hello world") (Thread/sleep 10000) (System/exit 0)
-    (future
-      (let [logger
-            (reify clojure.tools.logging.impl.Logger
-              (enabled? [self level] true)
-              (write! [self level throwable message]
-                (j/with-db-transaction [conn dbconfig]
-                  (if (= level :checkpoint)
-                    ;;;
-                    (do #_(println (type message) (type (into {} message)) (-> message :success))
-                    #_(System/exit 0)
-                    (j/insert! conn :checkpoint
-                      {:id (-> message :runid)
-                       :test_run_id test-run-id
-                       :success (-> message :success :value true?)
-                       :data message}))
-                    (if throwable
-                      ;; FIXME not sure what "throwable" means
-                      ;; in this context but we never get here:
-                      (j/insert! conn :log_entry
-                        {:test_run_id test-run-id
-                         :level "fatal"
-                         :message "lalalala"})
-                      (j/insert! conn :log_entry
-                        {:test_run_id test-run-id
-                         :level (name level)
-                         :message message}))))
-                ))
-            lfactory
-            (reify clojure.tools.logging.impl.LoggerFactory
-              (get-logger [self namesp]
-                logger)
-              (name [self] "dblogger"))]
-        (binding [*logger-factory* lfactory]
-          (let [idx (atom 0)
-                return (try (linen/run config)
-                            (catch Exception e
-                              (loop [e e]
-                                (when-not (nil? e)
-                                  (log :fatal (.getMessage e))
-                                  (log :trace
-                                       (with-out-str
-                                         (clojure.pprint/pprint
-                                           (.getStackTrace e))))
-                                  (recur (.getCause e))
-                                  ))))]
+    (let [thread
+          (Thread.
+            (fn []
+              (try
+                (let [logger
+                      (reify clojure.tools.logging.impl.Logger
+                        (enabled? [self level] true)
+                        (write! [self level throwable message]
+                          (j/with-db-transaction [conn dbconfig]
+                            (if (= level :checkpoint)
+                              (j/insert! conn :checkpoint
+                                {:id (-> message :runid)
+                                 :test_run_id test-run-id
+                                 :success (-> message :success :value true?)
+                                 :data message})
+                              (if throwable
+                                ;; FIXME not sure what "throwable" means
+                                ;; in this context but we never get here:
+                                (j/insert! conn :log_entry
+                                  {:test_run_id test-run-id
+                                   :level (name level)
+                                   :message (str "throwable: " message)})
+                                (j/insert! conn :log_entry
+                                  {:test_run_id test-run-id
+                                   :level (name level)
+                                   :message message}))))))
+                      lfactory
+                      (reify clojure.tools.logging.impl.LoggerFactory
+                        (get-logger [self namesp]
+                          logger)
+                        (name [self] "dblogger"))]
+                  (binding [*logger-factory* lfactory]
+                    (let [idx (atom 0)
+                          return (try (linen/run config)
+                                      (catch Exception e
+                                        (loop [e e]
+                                          (when-not (nil? e)
+                                            (log :fatal (.getMessage e))
+                                            (log :trace
+                                                 (with-out-str
+                                                   (clojure.pprint/pprint
+                                                     (.getStackTrace e))))
+                                            (recur (.getCause e))))))]
 
-            (doseq [hkey (-> config :harvest)]
-              (when-let [data (linen/harvest return hkey)]
-                (j/with-db-transaction [conn dbconfig]
-                  (j/insert! conn :harvest
-                    {:name hkey
-                     :test_run_id test-run-id
-                     :data data}))))
+                      (doseq [hkey (-> config :harvest)]
+                        (when-let [data (linen/harvest return hkey)]
+                          (j/with-db-transaction [conn dbconfig]
+                            (j/insert! conn :harvest
+                              {:name hkey
+                               :test_run_id test-run-id
+                               :data data}))))
 
-            (let [checkpoints (linen/returns return)]
-              (j/with-db-transaction [conn dbconfig]
-                (j/update! conn :test_run
-                  {:status "complete"
-                   :num_checkpoints (count checkpoints)
-                   :num_failures (->> checkpoints
-                                   (filter
-                                     #(-> % :success :value false?))
-                                   count)}
-                  ["id = ?" test-run-id]))
+                      (let [checkpoints (linen/returns return)]
+                        (j/with-db-transaction [conn dbconfig]
+                          (j/update! conn :test_run
+                            {:status "complete"
+                             :num_checkpoints (count checkpoints)
+                             :num_failures (->> checkpoints
+                                             (filter
+                                               #(-> % :success :value false?))
+                                             count)}
+                            ["id = ?" test-run-id]))
 
-              (j/with-db-transaction [conn dbconfig]
-                (j/insert! conn :raw_result
-                  {:test_run_id test-run-id
-                   :raw return})
-                #_(doseq [[idx checkpoint] (map-indexed vector checkpoints)]
-                  (j/insert! conn :checkpoint
-                    {:idx idx
-                     :test_run_id test-run-id
-                     :success (-> checkpoint :success :value true?)
-                     :data checkpoint}))))
+                        (j/with-db-transaction [conn dbconfig]
+                          (j/insert! conn :raw_result
+                            {:test_run_id test-run-id
+                             :raw return})))
+                      (remove-test! (str test-run-id))
+                      nil)))
+                (catch InterruptedException ie
+                  (remove-test! (str test-run-id))
+                  (j/with-db-transaction [conn dbconfig]
+                    (j/update! conn :test_run
+                      {:status "interrupted"}
+                      ["id = ?" test-run-id]))))))]
+      (j/with-db-transaction [conn dbconfig]
+        (j/update! conn :test_run
+          {:status "running"}
+          ["id = ?" test-run-id]))
+      (swap! testrun-map
+        #(assoc % (str test-run-id) thread))
+      (.start thread)
+      test-run-id
+      )))
 
-            nil))))
+(defn interrupt
+  [testrun-id]
+  (let [thread (-> testrun-map (get testrun-id))]
+    (.interrupt thread)))
+
+(defn kill
+  [testrun-id]
+  (let [thread (-> testrun-map (get testrun-id))]
+    (.stop thread)
     (j/with-db-transaction [conn dbconfig]
       (j/update! conn :test_run
-        {:status "running"}
-        ["id = ?" test-run-id]))
-    test-run-id
-    ))
+        {:status "killed"}
+        ["id = ?" (java.util.UUID/fromString testrun-id)]))
+    (remove-test! testrun-id)))
 

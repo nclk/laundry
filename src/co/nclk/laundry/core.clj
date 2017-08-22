@@ -255,7 +255,14 @@
                                         :default ["default"]
                                         :required false}}
          :returns {:test_run_id {:type "uuid"}}}]})
-    
+    (POST "/signal" request
+      (let [data (:body request)
+            testrun-id (:testrun-id data)
+            signal (:message data)]
+        (condp = signal
+          "interrupt" (actions/interrupt testrun-id)
+          "kill" (actions/kill testrun-id))
+        {:status 204}))
     (POST "/run" request
       (let [data (:body request)
             ;;config-profiles (:config_profiles data ["default"])
