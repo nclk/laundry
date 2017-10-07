@@ -24,9 +24,10 @@
         :else value))))
 
 (defn value-to-json-pgobject [value]
-  (doto (PGobject.)
-    (.setType "jsonb")
-      (.setValue (json/generate-string value))))
+  (let [value (get value :pg-json value)]
+    (doto (PGobject.)
+      (.setType "jsonb")
+        (.setValue (json/generate-string value)))))
 
 (extend-protocol j/ISQLValue
   clojure.lang.IPersistentMap
@@ -66,7 +67,7 @@
               (let [contents (-> m slurp yaml/parse-string)
                     prototype
                     {:name (get contents :name nm)
-                     :data (get contents :data contents)}]
+                     :data {:pg-json (get contents :data contents)}}]
                 (-> prototype
                   (maybe-column :documentation contents)
                   (maybe-column :meta contents))))
