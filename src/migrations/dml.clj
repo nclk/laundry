@@ -64,14 +64,14 @@
           (j/with-db-transaction [conn db-config]
             (j/insert! conn rel
               (let [contents (-> m slurp yaml/parse-string)
+                    k (:key contents)
                     prototype
                     {:name nm
                      :data (if (:data contents)
-                             (if (:key contents)
-                               {(-> contents :key keyword) (:data contents)}
-                               (:data contents))
+                             (:data contents)
                              contents)}]
                 (-> prototype
+                  (maybe-column :namespace contents)
                   (maybe-column :documentation contents)
                   (maybe-column :meta contents))))
             (log :info (str (name rel) " \"" nm "\" inserted.")))
