@@ -67,7 +67,9 @@
                     prototype
                     {:name nm
                      :data (if (:data contents)
-                             (:data contents)
+                             (if (:key contents)
+                               {(-> contents :key keyword) (:data contents)}
+                               (:data contents))
                              contents)}]
                 (-> prototype
                   (maybe-column :documentation contents)

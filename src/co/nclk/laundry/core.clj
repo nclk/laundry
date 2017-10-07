@@ -43,8 +43,7 @@
                         [(str api-base
                               "/config-profile-program-maps/?config_profile=%s")
                          :name]
-                        :user [(str api-base "/users/%s")
-                               :username]}
+                        :user [(str api-base "/users/%s") :username]}
     :filter-keys #{:name :username}
     :insert-keys #{:name :data :username}
     :update-keys #{:name :data}
@@ -236,13 +235,11 @@
                                  request
                                  (str api-base (:context v) "/")))]))
             (into {}))]
-      
       {:status 200 :body controller})))
 
 (defn actions
   [api-base]
   (context "/actions" []
-
     (GET "/" request
       {:status 200
        :body
@@ -262,7 +259,7 @@
         (condp = signal
           "interrupt" (actions/interrupt testrun-id)
           "kill" (actions/kill testrun-id))
-        {:status 204}))
+        {:status 204 :body {:message "no content"}}))
     (POST "/run" request
       (let [data (:body request)
             ;;config-profiles (:config_profiles data ["default"])
@@ -295,10 +292,11 @@
     (route/not-found nil)))
 
 (defn laundry [api-base]
-  (-> (routes (api api-base))
-    wrap-json-body
-    (wrap-defaults api-defaults)
-    wrap-api-exception
-    wrap-json
-    ))
+  (let [api-base (if-not (string? api-base) "/api/v1" api-base)]
+    (-> (routes (api api-base))
+      wrap-json-body
+      (wrap-defaults api-defaults)
+      wrap-api-exception
+      wrap-json
+      )))
 

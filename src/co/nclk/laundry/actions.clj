@@ -93,7 +93,7 @@
                                 (j/insert! conn :log_entry
                                   {:test_run_id test-run-id
                                    :level (name level)
-                                   :message message}))))))
+                                   :message (or message "[empty]")}))))))
                       lfactory
                       (reify clojure.tools.logging.impl.LoggerFactory
                         (get-logger [self namesp]
@@ -123,7 +123,7 @@
                       (let [checkpoints (linen/returns return)]
                         (j/with-db-transaction [conn dbconfig]
                           (j/update! conn :test_run
-                            {:status "complete"
+                            {:status (if checkpoints "complete" "interrupted")
                              :num_checkpoints (count checkpoints)
                              :num_failures (->> checkpoints
                                              (filter
@@ -137,11 +137,11 @@
                              :raw return})))
                       (remove-test! (str test-run-id))
                       nil)))
-                (catch InterruptedException ie
+                (catch Exception ie
                   (remove-test! (str test-run-id))
                   (j/with-db-transaction [conn dbconfig]
                     (j/update! conn :test_run
-                      {:status "interrupted"}
+                      {:status "error"}
                       ["id = ?" test-run-id]))))))]
       (j/with-db-transaction [conn dbconfig]
         (j/update! conn :test_run
@@ -150,18 +150,19 @@
       (swap! testrun-map
         #(assoc % (str test-run-id) thread))
       (.start thread)
-      test-run-id
-      )))
+      test-run-id)))
 
 (defn interrupt
   [testrun-id]
-  (let [thread (-> testrun-map (get testrun-id))]
+  (when-let [thread (-> @testrun-map (get testrun-id))]
     (.interrupt thread)))
 
 (defn kill
   [testrun-id]
-  (let [thread (-> testrun-map (get testrun-id))]
+  (when-let [thread (-> @testrun-map (get testrun-id))]
     (.stop thread)
+    ;; this doesn't work because linen seems to be catching all errors and
+    ;; returning nil
     (j/with-db-transaction [conn dbconfig]
       (j/update! conn :test_run
         {:status "killed"}

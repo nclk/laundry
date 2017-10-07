@@ -3,7 +3,7 @@
   <groupId>co.nclk</groupId>
   <artifactId>laundry</artifactId>
   <packaging>jar</packaging>
-  <version>0.3.8</version>
+  <version>0.4.1</version>
   <name>laundry</name>
   <description>FIXME: write description</description>
   <url>http://example.com/FIXME</url>
@@ -14,7 +14,7 @@
     </license>
   </licenses>
   <scm>
-    <tag>0b138788acd362a5ce4c6f8b141d92d7b16f74da
+    <tag>1d8e86fc36c5dcc832810517a0c10100012edfa1
 </tag>
     <url/>
   </scm>
