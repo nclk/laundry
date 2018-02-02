@@ -24,9 +24,10 @@
         :else value))))
 
 (defn value-to-json-pgobject [value]
-  (doto (PGobject.)
-    (.setType "jsonb")
-      (.setValue (json/generate-string value))))
+  (let [value (get value :pg-json value)]
+    (doto (PGobject.)
+      (.setType "jsonb")
+        (.setValue (json/generate-string value)))))
 
 (extend-protocol j/ISQLValue
   clojure.lang.IPersistentMap
@@ -62,18 +63,16 @@
       (let [nm (-> m .getName (clojure.string/replace #".yaml$" ""))]
         (try
           (doseq [contents (-> m slurp yaml/parse-all)]
-            (let [nm (or (:name contents) nm)]
+            (let [nm (get contents :name nm)]
               (j/with-db-transaction [conn db-config]
                 (j/insert! conn rel
                   (let [prototype
-                        {:name (or (:name contents) nm)
-                         :data (if (:data contents)
-                                 (:data contents)
-                                 contents)}]
+                        {:name nm
+                         :data {:pg-json (get contents :data contents)}}]
                     (-> prototype
                       (maybe-column :documentation contents)
-                      (maybe-column :meta contents)))))
-              (log :info (str (name rel) " \"" nm "\" inserted."))))
+                      (maybe-column :meta contents))))
+                (log :info (str (name rel) " \"" nm "\" inserted.")))))
           (catch org.postgresql.util.PSQLException psqle
             (log :warn (str (name rel)
                             " \""

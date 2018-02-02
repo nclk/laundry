@@ -13,6 +13,7 @@
   (fn [& [filters
           {:keys [order
                   per-page
+                  offset
                   page
                   direction]
            :or {page "1"
@@ -22,7 +23,8 @@
           page (if (pos? page)
                  page 1)
           per-page (as-int per-page)
-          offset (* (dec page) per-page)
+          offset (or (and offset (as-int offset))
+                     (* (dec page) per-page))
           results
           (samling relation
                    :filters filters

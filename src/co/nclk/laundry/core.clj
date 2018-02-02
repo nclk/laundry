@@ -43,8 +43,7 @@
                         [(str api-base
                               "/config-profile-program-maps/?config_profile=%s")
                          :name]
-                        :user [(str api-base "/users/%s")
-                               :username]}
+                        :user [(str api-base "/users/%s") :username]}
     :filter-keys #{:name :username}
     :insert-keys #{:name :data :username}
     :update-keys #{:name :data}
@@ -236,13 +235,24 @@
                                  request
                                  (str api-base (:context v) "/")))]))
             (into {}))]
-      
       {:status 200 :body controller})))
+
+
+(defn default-config-profiles
+  [prg-name]
+  (let [[maps {cnt :count}] (models/samling
+                              :config_profile_program_map
+                              :filters {:program prg-name})]
+    (if (zero? cnt)
+      []
+      (models/samling
+        :config_profile
+        :filters {:name (map :config_profile maps)}))))
+
 
 (defn actions
   [api-base]
   (context "/actions" []
-
     (GET "/" request
       {:status 200
        :body
@@ -255,7 +265,14 @@
                                         :default ["default"]
                                         :required false}}
          :returns {:test_run_id {:type "uuid"}}}]})
-    
+    (POST "/signal" request
+      (let [data (:body request)
+            testrun-id (:testrun-id data)
+            signal (:message data)]
+        (condp = signal
+          "interrupt" (actions/interrupt testrun-id)
+          "kill" (actions/kill testrun-id))
+        {:status 204 :body {:message "no content"}}))
     (POST "/run" request
       (let [data (:body request)
             ;;config-profiles (:config_profiles data ["default"])
@@ -265,9 +282,16 @@
             ;;              :config_profile
             ;;              :filters {:program_name prg-name
             ;;                        :name config-profiles})
-            configs (conj []
-                      {:name "__$$$__"
-                       :data (reduce merge (:env data))})
+            configs (if (or (not (:env data))
+                            (empty? (:env data)))
+                      ;; `first` refers to the actual results (i.e.,
+                      ;; the second is a map of other info such as count)
+                      (-> prg-name default-config-profiles first)
+                      (mapv
+                        (fn [config]
+                          {:name (-> config first key name)
+                           :data (-> config first val)})
+                        (:env data)))
             _ (println configs)
             resp (actions/run
                    prg
@@ -288,10 +312,11 @@
     (route/not-found nil)))
 
 (defn laundry [api-base]
-  (-> (routes (api api-base))
-    wrap-json-body
-    (wrap-defaults api-defaults)
-    wrap-api-exception
-    wrap-json
-    ))
+  (let [api-base (if-not (string? api-base) "/api/v1" api-base)]
+    (-> (routes (api api-base))
+      wrap-json-body
+      (wrap-defaults api-defaults)
+      wrap-api-exception
+      wrap-json
+      )))
 

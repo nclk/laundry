@@ -1,0 +1,7 @@
+dbtype: postgresql
+dbname: sut
+host: sutdb
+host: 172.18.0.2
+#host: localhost
+user: sut
+password: sut
