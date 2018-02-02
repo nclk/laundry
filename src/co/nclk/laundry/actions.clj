@@ -35,30 +35,36 @@
     (handlerfn "program")
     (handlerfn "module")))
 
-(defn run [program configs & [hkeys]]
-  (let [seed (.getTime (java.util.Date.))
+(defn run [program configs & [hkeys seed]]
+  (let [seed (or seed (.getTime (java.util.Date.)))
+        laundry-config (when-let [laundry-file
+                                  (clojure.java.io/resource "laundry.yaml")]
+                         (-> laundry-file slurp yaml/parse-string))
+        default-config {:env (or (:env laundry-config {}))
+                        :effective seed
+                        :harvest (or hkeys [])
+                        :log-checkpoints? true
+                        :data-connector ctor
+                        :genv (atom
+                                (into {}
+                                  (for [[k v] (System/getenv)]
+                                    [(keyword k) v])))
+                        :merge-global-environment true
+                        :program (:data program)}
         config
         (loop [args configs
-               config {:env {}
-                       :effective seed
-                       :harvest (or hkeys [])
-                       :log-checkpoints? true
-                       :data-connector ctor
-                       :genv (atom
-                               (into {}
-                                 (for [[k v] (System/getenv)]
-                                   [(keyword k) v])))
-                       :merge-global-environment true
-                       :program (:data program)}]
+               config (merge laundry-config default-config)]
           (if (empty? args)
             config
             (recur
               (drop 1 args)
-              (assoc config :env
-                            (merge (:env config)
-                                   (linen/evaluate
-                                     (-> args first :data)
-                                     config))))))
+              (let [env (:env config)
+                    arg (first args)]
+                (assoc config :env
+                              (merge env
+                                     (linen/evaluate
+                                       {(-> arg :name keyword) (-> arg :data)}
+                                       config)))))))
         test-run-id (java.util.UUID/randomUUID)]
     (println "Evaluated environment:")
     (clojure.pprint/pprint config)
@@ -76,6 +82,7 @@
                       (reify clojure.tools.logging.impl.Logger
                         (enabled? [self level] true)
                         (write! [self level throwable message]
+                          (println "XXXLALAALAALAL!!!!!!!!!!\n\n" self level throwable message)
                           (j/with-db-transaction [conn dbconfig]
                             (if (= level :checkpoint)
                               (j/insert! conn :checkpoint
