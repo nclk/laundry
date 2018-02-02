@@ -42,6 +42,7 @@
        :previous previous
        :last last*
        :count total
+       :length (-> results first count)
        :per-page per-page
        :current page
        :order order
