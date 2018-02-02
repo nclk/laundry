@@ -237,6 +237,19 @@
             (into {}))]
       {:status 200 :body controller})))
 
+
+(defn default-config-profiles
+  [prg-name]
+  (let [[maps {cnt :count}] (models/samling
+                              :config_profile_program_map
+                              :filters {:program prg-name})]
+    (if (zero? cnt)
+      []
+      (models/samling
+        :config_profile
+        :filters {:name (map :config_profile maps)}))))
+
+
 (defn actions
   [api-base]
   (context "/actions" []
@@ -269,9 +282,16 @@
             ;;              :config_profile
             ;;              :filters {:program_name prg-name
             ;;                        :name config-profiles})
-            configs (conj []
-                      {:name "__$$$__"
-                       :data (reduce merge (:env data))})
+            configs (if (or (not (:env data))
+                            (empty? (:env data)))
+                      ;; `first` refers to the actual results (i.e.,
+                      ;; the second is a map of other info such as count)
+                      (-> prg-name default-config-profiles first)
+                      (mapv
+                        (fn [config]
+                          {:name (-> config first key name)
+                           :data (-> config first val)})
+                        (:env data)))
             _ (println configs)
             resp (actions/run
                    prg

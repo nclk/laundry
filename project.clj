@@ -1,4 +1,4 @@
-(defproject co.nclk/laundry "0.4.3-SNAPSHOT"
+(defproject co.nclk/laundry "1.0.0-SNAPSHOT"
   :description "FIXME: write description"
   :url "http://example.com/FIXME"
   :license {:name "Eclipse Public License"
