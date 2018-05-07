@@ -1,0 +1,61 @@
+name: oracle-url-status
+requires:
+- key: EXPIRY
+  default: 1531180800
+- key: ATTEMPTS
+  default: 3
+- key: SLEEP
+  default: 60
+- key: HTTP_STATUS
+  default: 200
+- key: URL
+provides:
+- key: SUCCESS
+- key: ERR
+- key: OUT
+checkpoints:
+- - nodes:
+    - success: SUCCESS
+      err: ERR
+      out: OUT
+    display: Testing that the Oracle URL at "~{{URL}}" responds with status ~{HTTP_STATUS}.
+    assert: true
+    source: |
+      set -e
+      
+      
+      if [ $(date "+%s") -gt ~{EXPIRY} ]; then
+          echo "Failed because Oracle's published patch day is approaching, which means "\
+               "that their download URL is going to expire soon.";
+          exit 1;
+      fi
+      
+      times_failed=0
+      
+      for i in {1..~{ATTEMPTS}}; do
+          
+          #status=$(curl -L -s -o /dev/null -w "%{http_code}" ~{{URL}})
+          status=404
+          
+          printf "Attempt #$i: "
+          
+          if [ $status != "~{HTTP_STATUS}" ]; then
+              times_failed=$((times_failed+1));
+              echo "Fail! Status was $status.";
+          else
+              echo "Success ($status).";
+              break;
+          fi
+          
+          if [ $i -eq ~{ATTEMPTS} ]; then break; fi
+          
+          #sleep_time=$((60*60/4));
+          sleep_time=~{SLEEP};
+          echo "Next attempt in $sleep_time seconds.";
+          sleep $sleep_time;
+      done
+      
+      if [ $times_failed -gt 2 ]; then
+      	echo "Oracle Java was not able to be downloaded.";
+      	exit 1;
+      fi

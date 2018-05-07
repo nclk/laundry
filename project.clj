@@ -10,14 +10,16 @@
                  [ring/ring-core "1.5.0"]
                  [ring/ring-defaults "0.2.1"]
                  [ring/ring-jetty-adapter "1.5.0"]
-                 [cheshire "5.6.3"]
+                 [cheshire "5.8.0"]
                  [compojure "1.5.1"]
                  [org.clojure/java.jdbc "0.7.0-alpha1"]
                  [org.postgresql/postgresql "9.4.1212"]
                  [ragtime "0.6.0"]
+                 [com.novemberain/pantomime "2.10.0"]
+                 [hiccup "1.0.5"]
                  ]
   :plugins [[lein-ring "0.9.7"]]
-  :ring {:handler co.nclk.laundry.core/laundry}
+  :ring {:handler co.nclk.laundry.core/main}
   :aliases {"ddl" ["run" "-m" "migrations.ddl"]
             "dml" ["run" "-m" "migrations.dml"]}
   :aot [co.nclk.laundry.APIException])

@@ -35,39 +35,45 @@
     (handlerfn "program")
     (handlerfn "module")))
 
+(defn merge-evaluated-configs
+  [configs config]
+  (if (empty? configs)
+    config
+    (recur
+      (drop 1 configs)
+      (let [env (:env config)
+            arg (first configs)]
+        (assoc config :env
+                      (merge env
+                             (linen/evaluate
+                               {(-> arg :name) (-> arg :data)}
+                               config)))))))
+
 (defn run [program configs & [hkeys seed]]
   (let [seed (or seed (.getTime (java.util.Date.)))
         laundry-config (when-let [laundry-file
                                   (clojure.java.io/resource "laundry.yaml")]
                          (-> laundry-file slurp yaml/parse-string))
-        default-config {:env (or (:env laundry-config {}))
-                        :effective seed
+        _ (println seed)
+        default-config {:env {}
+                        :effective (long seed)
                         :harvest (or hkeys [])
                         :log-checkpoints? true
                         :data-connector ctor
-                        :genv (atom
+                        :genv (fn []
                                 (into {}
                                   (for [[k v] (System/getenv)]
                                     [(keyword k) v])))
-                        :merge-global-environment true
+                        :merge-global-environment false
                         :program (:data program)}
-        config
-        (loop [args configs
-               config (merge laundry-config default-config)]
-          (if (empty? args)
-            config
-            (recur
-              (drop 1 args)
-              (let [env (:env config)
-                    arg (first args)]
-                (assoc config :env
-                              (merge env
-                                     (linen/evaluate
-                                       {(-> arg :name keyword) (-> arg :data)}
-                                       config)))))))
+        config (merge-evaluated-configs
+                 configs
+                 (merge default-config laundry-config))
         test-run-id (java.util.UUID/randomUUID)]
+
     (println "Evaluated environment:")
     (clojure.pprint/pprint config)
+
     (j/with-db-transaction [conn dbconfig]
       (j/insert! conn :test_run
         {:id test-run-id
@@ -82,7 +88,6 @@
                       (reify clojure.tools.logging.impl.Logger
                         (enabled? [self level] true)
                         (write! [self level throwable message]
-                          (println "XXXLALAALAALAL!!!!!!!!!!\n\n" self level throwable message)
                           (j/with-db-transaction [conn dbconfig]
                             (if (= level :checkpoint)
                               (j/insert! conn :checkpoint

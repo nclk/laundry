@@ -1,0 +1,41 @@
+name: &test-name oracle-url-status
+config-profile:
+- ORACLE_URL
+
+main:
+  module: oracle-url-status
+  in:
+    SLEEP: 1
+    URL: ~@ORACLE_URL
+  out:
+    CONTINUE: ~@SUCCESS
+    STDOUT: ~@OUT
+  children:
+  - $markdown: |
+      ### Oracle URL Status test result #~{x}
+
+      _**Success?**_ ~{CONTINUE}
+
+      stdout:
+
+      ```~{{STDOUT}}```
+    #$html: |
+    #  <h2>Oracle URL Status test results #~{x}</h2>
+    #  <p><strong>Success? ~{CONTINUE}</strong></p>
+    #  <p>stdout:</p>
+    #  <pre>~{{STDOUT}}</pre>
+    #$hoquet:
+    #- ["h2", "Oracle URL Status test results #~{x}"]
+    #- ["p"
+    #  , "For URL \""
+    #  , ["a", {href: ~@ORACLE_URL}, ~@ORACLE_URL]
+    #  , "\"."
+    #  ]
+    #- ["p", "Success? ", ["strong", "~{CONTINUE}"]]
+    #- ["p", "stdout:"]
+    #- ["pre", "~{{STDOUT}}"]
+
+
+documentation:
+  description: >-
+    An example test program for demo purposes.

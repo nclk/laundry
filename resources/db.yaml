@@ -1,7 +1,6 @@
 dbtype: postgresql
-dbname: sut
-host: sutdb
-host: 172.18.0.2
+dbname: laundry
+host: db
 #host: localhost
-user: sut
-password: sut
+user: laundry
+password: laundry

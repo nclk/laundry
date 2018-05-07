@@ -1,0 +1,79 @@
+version: '2'
+services:
+  api:
+    container_name: api
+    command: bash bin/initialize.sh
+    build: ./
+    depends_on:
+    - db
+    expose:
+    - "80"
+    ports:
+    - "8080:80"
+    environment:
+      LEIN_SNAPSHOTS_IN_RELEASE: override
+      PGPASSWORD: laundry
+      DB_CONTAINER: db
+      PORT: 80
+    volumes:
+    - ./:/laundry
+
+  db:
+    container_name: db
+    image: postgres
+    environment:
+      POSTGRES_USER: laundry
+      POSTGRES_PASSWORD: laundry
+    volumes:
+    - ${PWD}/.laundry-data:/var/lib/postgresql/data
+
+  interceptor:
+    container_name: interceptor
+    image: pojagi/interceptor
+    depends_on: [ interceptordb ]
+    ports:
+    - "3000:3000"
+    environment:
+      PORT: 3000
+      ADMIN_PASSWORD: admin
+      SESSION_SECRET: foo
+      DBHOST: interceptordb
+
+  interceptordb:
+    container_name: interceptordb
+    image: mongo:3.4.1
+    volumes:
+    - ./.interceptor-data:/data
+
+  #se-chrome:
+  #  container_name: se-chrome
+  #  image: selenium/standalone-chrome
+  #  ports:
+  #  - "4444:4444"
+  #  volumes:
+  #  - "/dev/urandom:/dev/random"
+  #  - "/dev/shm:/dev/shm"
+
+  web:
+    container_name: web
+    image: pojagi/laundry-web
+    ports:
+    - "80:80"
+    - "443:443"
+    depends_on: [ api ]
+    volumes:
+    - "/etc/ssl/certs:/etc/ssl/certs"
+    - "/etc/ssl/private:/etc/ssl/private"
+    environment:
+      DOLLAR: $$
+      VERSION: 1.0.0
+      API_PROTOCOL: https
+      API_HOST: localhost
+      API_LOCAL: sutapi:80
+      AUTH_LOCAL: interceptor:3000
+      TITLE: Laundry
+      REDIRECT_HTTP_CODE: 302
+      SSL_CERT: /etc/ssl/certs/nginx-selfsigned.crt
+      SSL_CERT_KEY: /etc/ssl/private/nginx-selfsigned.key
+      DEBUG: absolutely
+

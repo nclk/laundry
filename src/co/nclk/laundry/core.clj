@@ -10,7 +10,9 @@
                                                 wrap-json-body
                                                 wrap-api-exception]]
             [co.nclk.laundry.routes.common :refer :all]
-            [co.nclk.laundry.routes.config-profiles :refer :all]
+            [pantomime.mime :refer [mime-type-of]]
+            [hiccup.core :refer [html]]
+            ;;[co.nclk.laundry.routes.config-profiles :refer :all]
             )
   (:import (java.net NetworkInterface Inet4Address)))
 
@@ -249,6 +251,72 @@
         :config_profile
         :filters {:name (map :config_profile maps)}))))
 
+(defn get-file-by-name
+  [name files]
+  (->> files
+    (filter #(= (.getName %) name))
+    first))
+
+(defn list-item
+  [x api-base]
+  ["li"
+   ["a" {:href (str api-base x)} x]])
+
+(defn listing-to-html
+  [base listing]
+  (if (empty? listing)
+    (html ["p" "Empty"])
+    (html
+      ["ol"
+       (map #(list-item % base) listing)])))
+
+(defn resource-listing
+  [root body base]
+  (->> (.listFiles body)
+    (map #(.toURI %))
+    (map
+      (fn [uri]
+        (clojure.string/replace-first
+          (str uri "\n")
+          (re-pattern (str root)) "")))
+    sort
+    (listing-to-html base)))
+
+(defn public-resources
+  [base]
+  (context "/" []
+    (GET "*" request
+      (let [path (-> request :path-info)
+            body (-> "public"
+                     (str path)
+                     clojure.java.io/resource
+                     clojure.java.io/file)
+            root (-> "public" clojure.java.io/resource)]
+        (if-not body
+          {:status 404
+           :headers {"Content-Type" "text/plain; charset=utf-8"}
+           :body (str "Not found: " path)}
+          (if (.isDirectory body)
+            {:status 200
+             :body (resource-listing root body base)
+             :headers {"Content-Type" "text/html;charset=utf-8"}}
+            (let [mtype (mime-type-of body)
+                  {content-type :as
+                   :or {content-type
+                        (let [accepts (-> request :headers
+                                          (get "accept" "")
+                                          (clojure.string/split #","))]
+                          (when (some #(or (= % mtype)
+                                           (.contains % "*/*"))
+                                      accepts)
+                            mtype))}} (:params request)]
+              (if-not content-type
+                {:status 415
+                 :headers {"Content-Type" "text/plain"}
+                 :body (str "Content-Type \"" mtype "\" unacceptable")}
+                {:status 200
+                 :headers {"Content-Type" content-type}
+                 :body (slurp body)}))))))))
 
 (defn actions
   [api-base]
@@ -289,14 +357,12 @@
                       (-> prg-name default-config-profiles first)
                       (mapv
                         (fn [config]
-                          {:name (-> config first key name)
+                          {:name (-> config first key)
                            :data (-> config first val)})
                         (:env data)))
-            _ (println configs)
-            resp (actions/run
-                   prg
-                   configs
-                   (:harvest_keys data))]
+            ;_ (println configs)
+            seed (:seed data)
+            resp (actions/run prg configs (:harvest_keys data) seed)]
         (if (clojure.string/blank? (:error resp))
           {:status 201
            :body {:test_run_id resp}}
@@ -305,18 +371,34 @@
     ))
 
 (defn api [api-base]
-  (context api-base []
+  (routes
     (base api-base)
     (actions api-base)
     (context-compile (controller api-base))
     (route/not-found nil)))
 
-(defn laundry [api-base]
-  (let [api-base (if-not (string? api-base) "/api/v1" api-base)]
-    (-> (routes (api api-base))
-      wrap-json-body
-      (wrap-defaults api-defaults)
-      wrap-api-exception
-      wrap-json
-      )))
+(defn laundry
+  [& {:keys [api-base resources-base]
+      :or {api-base "/api/v1"
+           resources-base "/resources"}}]
+  (routes 
+    (context resources-base []
+      (public-resources resources-base))
+    (context api-base []
+      (-> (api api-base)
+        wrap-json-body
+        (wrap-defaults api-defaults)
+        wrap-api-exception
+        wrap-json))))
+
+
+(defn main [request]
+  (let [handler (laundry :api-base "/api/v1" :resources-base "/resources")]
+    (if (-> request :request-method (= :options))
+      (assoc (handler request)
+             :status 200
+             :headers {"Access-Control-Allow-Origin" "*"
+                       "Access-Control-Allow-Methods" "*"
+                       "Access-Control-Allow-Headers" "Content-Type"})
+      (handler request))))
 

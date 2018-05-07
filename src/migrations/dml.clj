@@ -112,7 +112,7 @@
       (let [data (-> program slurp yaml/parse-string)
             program-name (:name data)
             documentation (:documentation data)
-            config-profiles (:config-profiles data)]
+            config-profiles (:config-profile data)]
         (try
           (j/with-db-transaction [conn db-config]
             (j/insert! conn :program

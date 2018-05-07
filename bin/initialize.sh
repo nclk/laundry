@@ -1,8 +1,10 @@
 #!/bin/bash
 
-lein ddl sutdb up
-lein dml sutdb up
+export LEIN_ROOT=1
 
-lein ring server-headless
-#sudo java -jar target/laundry-0.1.0-SNAPSHOT-standalone.jar
+lein ddl ${DB_CONTAINER} up
+lein dml ${DB_CONTAINER} up
+
+#lein ring server-headless
+java -jar target/laundry-3.0.0-SNAPSHOT-standalone.jar
 
