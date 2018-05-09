@@ -100,11 +100,15 @@
                 programs
                 (reduce go programs (.listFiles f)))
               (let [dir (.getParentFile f)
-                    files (.listFiles dir)
-                    program (get-file-by-name "program.yaml" files)]
-                (when program
-                  (conj programs
-                        [dir program])))))
+                    files (->> (.listFiles dir)
+                               (filter #(.contains (.getName %) ".yaml")))]
+                (concat programs
+                        (for [program files]
+                          [dir program])))))
+                ;;    program (get-file-by-name "program.yaml" files)]
+                ;;(when program
+                ;;  (conj programs
+                ;;        [dir program])))))
           #{}
           (.listFiles f))]
     ;;(println programs) (System/exit 0)

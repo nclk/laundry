@@ -17,14 +17,15 @@
                   page
                   direction]
            :or {page "1"
-                per-page "50"}
+                per-page "50"
+                offset "0"}
            :as params}]]
     (let [page (as-int page)
           page (if (pos? page)
                  page 1)
           per-page (as-int per-page)
-          offset (or (and offset (as-int offset))
-                     (* (dec page) per-page))
+          offset (+ (as-int offset)
+                    (* (dec page) per-page))
           results
           (samling relation
                    :filters filters
@@ -45,6 +46,7 @@
        :length (-> results first count)
        :per-page per-page
        :current page
+       :offset offset
        :order order
        :direction direction
        :results (first results)})))

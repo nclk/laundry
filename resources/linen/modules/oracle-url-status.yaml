@@ -34,8 +34,8 @@ checkpoints:
       
       for i in {1..~{ATTEMPTS}}; do
           
-          #status=$(curl -L -s -o /dev/null -w "%{http_code}" ~{{URL}})
-          status=404
+          status=$(curl -L -s -o /dev/null -w "%{http_code}" ~{{URL}})
+          #status=404
           
           printf "Attempt #$i: "
           
