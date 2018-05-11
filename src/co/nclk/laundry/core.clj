@@ -184,7 +184,7 @@
     :related-resources {:test-run
                         [(str api-base "/test-runs/%s")
                          :test_run_id]}
-    :filter-keys #{:test_run_id|uuid :success|bool}
+    :filter-keys #{:test_run_id|uuid :success|bool :id|uuid}
     :routes [{:path "/"
               :methods #{:get}
               :collection? true}

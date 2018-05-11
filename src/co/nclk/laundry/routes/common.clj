@@ -24,15 +24,18 @@
           page (if (pos? page)
                  page 1)
           per-page (as-int per-page)
-          offset (+ (as-int offset)
-                    (* (dec page) per-page))
+          offset (as-int offset)
+          qoffset (+ offset
+                     (* (dec page) per-page))
+          limit (let [limit (- per-page offset)]
+                  (if (neg? limit) 0 limit))
           results
           (samling relation
                    :filters filters
                    :order order
                    :direction direction
-                   :limit per-page
-                   :offset offset)
+                   :limit limit
+                   :offset qoffset)
           total (-> results second :count)
           next* (when (> total (* page per-page))
                   (inc page))
