@@ -99,24 +99,17 @@
               (clojure.set/union
                 programs
                 (reduce go programs (.listFiles f)))
-              (let [dir (.getParentFile f)
-                    files (->> (.listFiles dir)
-                               (filter #(.contains (.getName %) ".yaml")))]
-                (concat programs
-                        (for [program files]
-                          [dir program])))))
-                ;;    program (get-file-by-name "program.yaml" files)]
-                ;;(when program
-                ;;  (conj programs
-                ;;        [dir program])))))
+              (if-not (-> f .getName (.contains ".yaml"))
+                programs
+                (conj programs f))))
           #{}
           (.listFiles f))]
     ;;(println programs) (System/exit 0)
-    (doseq [[parent program] programs]
+    (doseq [program programs]
       (let [data (-> program slurp yaml/parse-string)
             program-name (:name data)
             documentation (:documentation data)
-            config-profiles (:config-profile data)]
+            config-profiles (:config-profiles data)]
         (try
           (j/with-db-transaction [conn db-config]
             (j/insert! conn :program
