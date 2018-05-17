@@ -19,6 +19,6 @@ RUN chmod 755 /bin/lein
 ADD . /laundry
 RUN lein ring uberjar
 
-CMD ["java","-jar","target/sut-0.1.0-SNAPSHOT-standalone.jar"]
+CMD ["java", "-jar", "target/laundry-3.0.0-SNAPSHOT-standalone.jar"]
 #CMD ["bash", "bin/initialize.sh"]
 

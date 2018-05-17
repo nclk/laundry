@@ -199,13 +199,12 @@
     :related-resources {:test-run
                         [(str api-base "/test-runs/%s")
                          :test_run_id]}
-    :filter-keys #{:test_run_id|uuid :id|int}
+    :filter-keys #{:test_run_id|uuid :id|int :name}
     :routes [{:path "/"
               :methods #{:get}
               :collection? true}
-             {:path "/:name"
-              :methods #{:get}
-              :collection? true}]}
+             {:path "/:id"
+              :methods #{:get :delete}}]}
    "Log Entries"
    {:relation :log_entry
     :context "/log-entries"
@@ -335,7 +334,8 @@
          :returns {:test_run_id {:type "uuid"}}}]})
     (POST "/signal" request
       (let [data (:body request)
-            testrun-id (:testrun-id data)
+            testrun-id (if-let [testrun-id (:testrun-id data)]
+                         (java.util.UUID/fromString testrun-id))
             signal (:message data)]
         (condp = signal
           "interrupt" (actions/interrupt testrun-id)

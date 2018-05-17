@@ -11,6 +11,8 @@
     slurp
     yaml/parse-string))
 
+(println config*)
+
 (defn config [host]
   (assoc config* :host host))
 
