@@ -1,0 +1,9 @@
+name: config/foo
+
+provides:
+  FOO: bar
+
+---
+
+module: config/foo
+

@@ -11,6 +11,13 @@
             [co.nclk.laundry.models.common :as models]
             ))
 
+
+(defn pret
+  [x]
+  (println x)
+  x)
+
+
 (def dbconfig models/config)
 
 (def laundry-config
@@ -63,24 +70,16 @@
 ;;;;
 
 (defn handlerfn
-  [r]
+  [modules]
   (fn [s]
-    (let [rs (j/with-db-transaction [conn dbconfig]
-               (j/query conn
-                 [(format "select * from %s where name=?" r)
-                  s]))]
-      (when-not (empty? rs)
-        (-> rs first :data)))))
+    (yaml/parse-all
+      (if-let [data (-> s keyword modules)]
+        data
+        (let [rs (j/with-db-transaction [conn dbconfig]
+                   (j/query conn
+                     ["select * from module where name=?" s]))]
+          (-> rs first :src))))))
 
-(def ctor
-  (connector
-    (handlerfn "program")
-    (handlerfn "module")))
-
-(defn pret
-  [x]
-  (println x)
-  x)
 
 (defn merge-evaluated-configs
   [configs config]
@@ -159,16 +158,19 @@
            :data data})))))
 
 
-(defn checkpoints!
+(defn process-checkpoints!
   [return test-run-id config]
-  (let [checkpoints (linen/returns return)]
-    (j/with-db-transaction [conn dbconfig]
+  ;(let [checkpoints (linen/harvest return :checkpoint)]
+  (j/with-db-transaction [conn dbconfig]
+    (let [checkpoints
+          (j/query conn
+                   ["select * from checkpoint where test_run_id = ?" test-run-id])]
       (j/update! conn :test_run
         {:status (if @(:runnable? config) "complete" "interrupted")
          :num_checkpoints (count checkpoints)
          :num_failures (->> checkpoints
                          (filter
-                           #(-> % :success :value false?))
+                           #(-> % :success false?))
                          count)}
         ["id = ?" test-run-id]))))
 
@@ -198,23 +200,27 @@
       (binding [*logger-factory* lfactory]
         (let [return (do-run config)]
           (harvest! config return test-run-id)
-          (checkpoints! return test-run-id config)
+          (process-checkpoints! return test-run-id config)
           (raw-result! return test-run-id)
           nil)))
     (catch Exception ie
-      (test-status! "error" test-run-id))
+      (test-status! "error" test-run-id)
+      (log-run-exception! ie))
     (finally (remove-test! (str test-run-id)))))
 
 
 (defn default-config
-  [seed hkeys program]
+  [seed hkeys program main modules]
   {:env {}
    :runnable? (atom true)
    :effective (long seed)
    :harvest (or hkeys [])
    :log-checkpoints? true
-   :data-connector ctor
-   :genv (atom
+   :main (yaml/parse-all ((keyword main) modules))
+   :data-connector (connector
+                     (fn [s] nil) ;; no program resolution anymore
+                     (handlerfn modules))
+   :genv (fn []
            (into {}
              (for [[k v] (System/getenv)]
                [(keyword k) v])))
@@ -222,24 +228,26 @@
    :program (:data program)})
 
 
-(defn run [program configs & [hkeys seed]]
+(defn run [program main modules & [hkeys seed]]
   (let [seed (or seed (.getTime (java.util.Date.)))
-        config (merge-evaluated-configs
-                 configs
-                 (merge (default-config seed hkeys program) laundry-config))
+        config (merge (default-config seed hkeys program main modules) laundry-config)
         test-run-id (java.util.UUID/randomUUID)]
 
     (println "Seed:" seed)
     (println "Evaluated environment:")
     (clojure.pprint/pprint config)
 
-    (test-run! test-run-id seed (:name program) (:env config))
+    (println "Modules:")
+    (doseq [m modules] (println (val m)))
+
+    (test-run! test-run-id seed (:name program) modules)
 
     (test-status! "pending" test-run-id)
     (a/go (a/>! job-queue {:job #(run-with-logger test-run-id config)
-                         :config config
-                         :test-run-id test-run-id}))
+                           :config config
+                           :test-run-id test-run-id}))
     test-run-id))
+
 
 (defn interrupt
   [testrun-id]

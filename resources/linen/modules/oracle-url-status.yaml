@@ -1,5 +1,8 @@
 name: oracle-url-status
+
 requires:
+- key: URL
+  default: null
 - key: EXPIRY
   default: 1531180800
 - key: ATTEMPTS
@@ -8,21 +11,30 @@ requires:
   default: 60
 - key: HTTP_STATUS
   default: 200
-- key: URL
+
 provides:
-- key: SUCCESS
-- key: ERR
-- key: OUT
-checkpoints:
-- - nodes:
+- SUCCESS
+- ERR
+- OUT
+
+---
+
+parent:
+  ~(if:
+  - ~(clojure.string/blank?: [~@URL]
+  - module: config/oracle-url
+    outputs:
+      URL: ~@ORACLE_URL
+child:
+  checkpoint:
+    nodes:
     - success: SUCCESS
-      err: ERR
-      out: OUT
+      stderr: ERR
+      stdout: OUT
     display: Testing that the Oracle URL at "~{{URL}}" responds with status ~{HTTP_STATUS}.
     assert: true
     source: |
       set -e
-      
       
       if [ $(date "+%s") -gt ~{EXPIRY} ]; then
           echo "Failed because Oracle's published patch day is approaching, which means "\

@@ -5,8 +5,9 @@
                                                    ett
                                                    foga-in!
                                                    ändra!
-                                                   ]]
-            ))
+                                                   ]])
+  (:import java.net.URLEncoder)
+  )
 
 (defn collect*
   [relation]
@@ -70,6 +71,7 @@
   (fn [data filters]
     (ändra! relation data filters)))
 
+;; should just have used `partial` here
 (defn data-access-fns
   [relation]
   {:collect (collect* relation)
@@ -96,6 +98,7 @@
                         v)]))]
     (into {} (remove nil? params))))
 
+
 (defn resource-uri
   [request & [endpoint]]
   (str (or (-> request :headers (get "x-original-protocol"))
@@ -105,16 +108,24 @@
            (-> request :headers (get "host")))
        endpoint))
 
+
 (defn related-resources
   [resource controller request]
   (let [related (:related-resources controller)
         ind-href (:individual-href controller)
+        process-key
+        (fn [k]
+          (if (sequential? k)
+            (->> ((first k) resource)
+                 (map #(format (second k) (URLEncoder/encode (str %) "UTF-8")))
+                 (clojure.string/join (nth k 2)))
+            (URLEncoder/encode (str (k resource)) "UTF-8")))
         format-fun
         (fn [fks]
           (apply format
                  (flatten
                    [(first fks)
-                    (map #(% resource) (drop 1 fks))])))]
+                    (map process-key (drop 1 fks))])))]
     (assoc resource
       :href (resource-uri request (format-fun ind-href))
       :related-resources
@@ -166,6 +177,7 @@
                           "for each of (and only) %s.")
                      (:uri request)
                      ikeys))))
+        ;; yeah, but what if the database throws an exception?
         {:status 201
          :body (-> data
                  insert!
@@ -218,3 +230,4 @@
                   (:relation controller))))
             flatten
             (apply routes)))))))
+

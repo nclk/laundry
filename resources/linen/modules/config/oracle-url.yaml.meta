@@ -1,0 +1,11 @@
+name: Oracle Java URL
+
+documentation:
+  description: >-
+      URL to try for Oracle Java download.
+
+widget:
+  type: document
+  mode: yaml
+  read-only: false
+

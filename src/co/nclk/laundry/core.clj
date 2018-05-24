@@ -31,50 +31,50 @@
 
 (defn controller
   [api-base]
-  {"Config Profiles"
-   {:context "/config-profiles"
-    :relation :config_profile
-    :description
-    (str "Config profiles are resources that persist useful "
-         "configurations "
-         "for a particular test program. When used with the "
-         "`/actions/run` endpoint, each config from the given "
-         "list is `assoc`ed into the previous one in sequence, "
-         "providing a mechanism for overriding defaults.")
-    :related-resources {:config-profile-program-maps
-                        [(str api-base
-                              "/config-profile-program-maps/?config_profile=%s")
-                         :name]
-                        :user [(str api-base "/users/%s") :username]}
-    :filter-keys #{:name :username}
-    :insert-keys #{:name :data :username}
-    :update-keys #{:name :data}
-    :delete-keys #{:name}
-    :individual-href [(str api-base "/config-profiles/%s") :name]
-    :routes [{:path "/"
-              :methods #{:get :post}
-              :collection? true}
-             {:path "/:name"
-              :methods #{:get :put :delete}}
-             ]}
-   "Config Profile/Program Maps"
-   {:relation :config_profile_program_map
-    :context "/config-profile-program-maps"
-    :individual-href [(str api-base "/config-profile-program-maps/%s/%s")
-                      :config_profile :program]
-    :related-resources {:config_profile
-                        [(str api-base "/config-profiles/%s")
-                         :config_profile]
-                        :program
-                        [(str api-base "/programs/%s")
-                         :program]}
-    :filter-keys #{:program :config_profile}
-    :insert-keys #{:program :config_profile}
-    :routes [{:path "/"
-              :methods #{:get :post}
-              :collection? true}
-             {:path "/:config_profile/:program"
-              :methods #{:get :put :delete}}]}
+  {;;"Configuration data"
+   ;;{:context "/configs"
+   ;; :relation :config
+   ;; :description
+   ;; (str "Configuration data are resources that persist useful "
+   ;;      "configurations "
+   ;;      "for a particular test program. When used with the "
+   ;;      "`/actions/run` endpoint, each config from the given "
+   ;;      "list is `assoc`ed into the previous one in sequence, "
+   ;;      "providing a mechanism for overriding defaults.")
+   ;; :related-resources {:config-program-maps
+   ;;                     [(str api-base
+   ;;                           "/config-program-maps/?config=%s")
+   ;;                      :name]
+   ;;                     :user [(str api-base "/users/%s") :username]}
+   ;; :filter-keys #{:name :username}
+   ;; :insert-keys #{:name :data :username}
+   ;; :update-keys #{:name :data}
+   ;; :delete-keys #{:name}
+   ;; :individual-href [(str api-base "/configs/%s") :name]
+   ;; :routes [{:path "/"
+   ;;           :methods #{:get :post}
+   ;;           :collection? true}
+   ;;          {:path "/:name"
+   ;;           :methods #{:get :put :delete}}
+   ;;          ]}
+   ;;"Config/Program Maps"
+   ;;{:relation :config_program_map
+   ;; :context "/config-program-maps"
+   ;; :individual-href [(str api-base "/config-program-maps/%s/%s")
+   ;;                   :config_profile :program]
+   ;; :related-resources {:config
+   ;;                     [(str api-base "/configs/%s")
+   ;;                      :config]
+   ;;                     :program
+   ;;                     [(str api-base "/programs/%s")
+   ;;                      :program]}
+   ;; :filter-keys #{:program :config}
+   ;; :insert-keys #{:program :config}
+   ;; :routes [{:path "/"
+   ;;           :methods #{:get :post}
+   ;;           :collection? true}
+   ;;          {:path "/:config/:program"
+   ;;           :methods #{:get :put :delete}}]}
    "Users"
    {:relation :usr
     :context "/users"
@@ -92,17 +92,16 @@
    {:relation :program
     :context "/programs"
     :description "A test program written in the flax/linen paradigm."
-    :individual-href [(str api-base "/programs/%s")
-                      :name]
-    :related-resources {:config-profile-program-maps
-                        [(str api-base "/config-profile-program-maps/?program=%s")
-                         :name]
-                        :test-runs
+    :individual-href [(str api-base "/programs/%s") :name]
+    :related-resources {:test-runs
                         [(str api-base "/test-runs/?program_name=%s")
-                         :name]}
-    :filter-keys #{:name}
-    :insert-keys #{:name :data}
-    :update-keys #{:name :data}
+                         :name]
+                        :main
+                        [(str api-base "/modules/%s")
+                         :main]}
+    :filter-keys #{:name :main}
+    :insert-keys #{:name :main :documentation}
+    :update-keys #{:name :main :documentation}
     :routes [{:path "/"
               :methods #{:get :post}
               :collection? true}
@@ -113,14 +112,16 @@
     :context "/modules"
     :description (str "A module written in the flax/linen paradigm "
                       "to be used with linen programs.")
-    :individual-href [(str api-base "/modules/%s")
-                      :name]
+    :individual-href [(str api-base "/modules/%s") :name]
     :filter-keys #{:name}
     :routes [{:path "/"
               :methods #{:get :post}
               :collection? true}
              {:path "/:name"
-              :methods #{:get :put :delete}}]}
+              :methods #{:get :put :delete}}]
+    :related-resources {:dependencies [(str api-base "/modules/?%s")
+                                       [:dependencies "name=%s" "&"]]}
+   }
    "Test Runs"
    {:relation :test_run
     :context "/test-runs"
@@ -350,19 +351,20 @@
             ;;              :config_profile
             ;;              :filters {:program_name prg-name
             ;;                        :name config-profiles})
-            configs (if (or (not (:env data))
-                            (empty? (:env data)))
-                      ;; `first` refers to the actual results (i.e.,
-                      ;; the second is a map of other info such as count)
-                      (-> prg-name default-config-profiles first)
-                      (mapv
-                        (fn [config]
-                          {:name (-> config first key)
-                           :data (-> config first val)})
-                        (:env data)))
-            ;_ (println configs)
+            modules (-> data :modules)
+            ;;configs (if (or (not (:env data))
+            ;;                (empty? (:env data)))
+            ;;          ;; `first` refers to the actual results (i.e.,
+            ;;          ;; the second is a map of other info such as count)
+            ;;          (-> prg-name default-config-profiles first)
+            ;;          (mapv
+            ;;            (fn [config]
+            ;;              {:name (-> config first key)
+            ;;               :data (-> config first val)})
+            ;;            (:env data)))
+            ;;;_ (println configs)
             seed (:seed data)
-            resp (actions/run prg configs (:harvest_keys data) seed)]
+            resp (actions/run prg (:main data) modules (:harvest_keys data) seed)]
         (if (clojure.string/blank? (:error resp))
           {:status 201
            :body {:test_run_id resp}}

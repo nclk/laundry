@@ -17,6 +17,7 @@ services:
       PORT: 80
     volumes:
     - ./:/laundry
+    - ${HOME}/.m2:/root/.m2
 
   db:
     container_name: db
@@ -25,7 +26,7 @@ services:
       POSTGRES_USER: laundry
       POSTGRES_PASSWORD: laundry
     volumes:
-    - ${PWD}/.laundry-data:/var/lib/postgresql/data
+    - ./laundry-data:/var/lib/postgresql/data
 
   interceptor:
     container_name: interceptor
@@ -43,7 +44,7 @@ services:
     container_name: interceptordb
     image: mongo:3.4.1
     volumes:
-    - ./.interceptor-data:/data
+    - ./interceptor-data:/data
 
   #se-chrome:
   #  container_name: se-chrome
@@ -56,7 +57,7 @@ services:
 
   web:
     container_name: web
-    image: pojagi/laundry-web
+    image: pojagi/laundry-web:logs
     ports:
     - "80:80"
     - "443:443"
@@ -69,7 +70,7 @@ services:
       VERSION: 1.0.0
       API_PROTOCOL: https
       API_HOST: localhost
-      API_LOCAL: sutapi:80
+      API_LOCAL: api:80
       AUTH_LOCAL: interceptor:3000
       TITLE: Laundry
       REDIRECT_HTTP_CODE: 302

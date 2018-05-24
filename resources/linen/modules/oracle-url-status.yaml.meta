@@ -1,0 +1,10 @@
+name: Oracle URL Status
+
+widget:
+  type: document
+  mode: yaml
+
+documentation:
+  description: >-
+    Module that tests the status of an Oracle download URL.
+

@@ -1,0 +1,8 @@
+name: example1
+
+documentation:
+  description: >-
+    An example test program for demo purposes.
+
+main: oracle-url-status
+

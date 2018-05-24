@@ -1,0 +1,10 @@
+name: Foo
+
+widget:
+  type: document
+  mode: yaml
+  read-only: true
+
+documentation:
+  description: Foo
+

@@ -2,7 +2,8 @@
   (:require [clojure.java.jdbc :as j]
             [cheshire.core :as json]
             [clj-yaml.core :as yaml]
-            [clojure.tools.logging :refer [log]])
+            [clojure.tools.logging :refer [log]]
+            [co.nclk.linen.core :as linen])
   (:import org.postgresql.util.PGobject))
 
 (def config*
@@ -41,13 +42,7 @@
 (defn rollback [config]
   (j/with-db-transaction [conn config]
     (j/delete! conn :program [])
-    ;(j/delete! conn :test_run [])
-    ;(j/delete! conn :log_entry [])
-    ;(j/delete! conn :checkpoint [])
     (j/delete! conn :module [])
-    ;(j/delete! conn :raw_result [])
-    (j/delete! conn :config_profile_program_map [])
-    (j/delete! conn :config_profile [])
     ))
 
 (defn maybe-column
@@ -56,82 +51,97 @@
     (assoc prototype col-name (col-name contents))
     prototype))
 
-(defn migrate-dir [db-config rel dir]
-  (let [sources (-> dir ;; e.g., "linen/modules"
-                    clojure.java.io/resource
-                    clojure.java.io/file
-                    .listFiles)]
-    (doseq [m sources]
-      (let [nm (-> m .getName (clojure.string/replace #".yaml$" ""))]
-        (try
-          (doseq [contents (-> m slurp yaml/parse-all)]
-            (let [nm (get contents :name nm)]
-              (j/with-db-transaction [conn db-config]
-                (j/insert! conn rel
-                  (let [prototype
-                        {:name nm
-                         :data {:pg-json (get contents :data contents)}}]
-                    (-> prototype
-                      (maybe-column :documentation contents)
-                      (maybe-column :meta contents))))
-                (log :info (str (name rel) " \"" nm "\" inserted.")))))
-          (catch org.postgresql.util.PSQLException psqle
-            (log :warn (str (name rel)
-                            " \""
-                            (-> m .getName)
-                            "\" not inserted: " (.getMessage psqle)))))))))
 
-(defn get-file-by-name
-  [name files]
-  (->> files
-    (filter #(= (.getName %) name))
-    first))
+(defn name-from-file
+  [f rel]
+  (-> (.getAbsolutePath f)
+      (clojure.string/split (re-pattern (str "linen/" (name rel) "s/")))
+      last
+      (clojure.string/replace #"(\.yaml|\.yaml\.meta)$" "")))
+
+
+(defn module
+  [src [{name* :name
+         provides :provides
+         requires :requires} & body]]
+  {:name name*
+   :src src})
+
+
+(defn program
+  [src [{name* :name
+         main :main
+         documentation :documentation} & body]]
+  {:name name*
+   :main main
+   :documentation {:pg-json documentation}})
+
+
+(defn module-dependency-list
+  [conn tree module]
+  (if-let [src (-> conn (j/query ["select src from module where name = ?" module])
+                        first :src)]
+    (let [[_ & body] (linen/normalize-module (yaml/parse-all src))
+          modules (->> (linen/harvest body :module)
+                       (filter string?)
+                       (remove (set (conj tree module))))]
+      (if (empty? modules)
+        (conj tree module)
+        (reduce (partial module-dependency-list conn) (conj tree module) modules)))
+    tree))
+
+
+(defn migrate-dir [db-config rel dir]
+  (let [sources* (->> dir ;; e.g., "linen/modules"
+                      clojure.java.io/resource
+                      clojure.java.io/file
+                      .listFiles)
+        sources (remove #(re-matches #".*\.meta$" (.getName %)) sources*)
+        metas (filter #(re-matches #".*\.meta$" (.getName %)) sources*)]
+    (doseq [m sources]
+      (if (.isDirectory m)
+        (migrate-dir db-config rel (str dir "/" (.getName m)))
+        (let [file-name (name-from-file m rel)]
+          (try
+            (let [src (slurp m)
+                  contents (yaml/parse-all src)
+                  [{name* :name} & _] contents]
+              (if-not (= name* file-name)
+                (log :error (str "module not inserted: filename \""
+                                 file-name
+                                 "\" does not match module name \""
+                                 name* "\"."))
+                (j/with-db-transaction [conn db-config]
+                  (j/insert! conn rel
+                    (condp = rel
+                      :module (module src contents)
+                      :program (program src contents)))
+
+                  (j/update! conn :module
+                     {:dependencies (module-dependency-list conn [] name*)}
+                     ["name = ?" name*])
+
+                  (log :info (str (name rel) " inserted \"" name* "\"."))
+                  (when-let [metaf (->> metas (filter #(= (name-from-file % rel) name*)) first)]
+                    (let [meta* (-> metaf slurp yaml/parse-string)]
+                      (j/update! conn rel
+                        {:meta {:pg-json meta*}}
+                        ["name = ?" name*])
+                      (log :info (str "meta updated for " (name rel) " \"" name* "\"."))))
+                  )))
+            (catch org.postgresql.util.PSQLException psqle
+              (log :warn (str (name rel)
+                              " \""
+                              (-> m .getAbsolutePath)
+                              "\" not inserted: " (.getMessage psqle))))))))
+    ))
+
 
 (defn migrate
   [db-config]
   (migrate-dir db-config :module "linen/modules")
-  (migrate-dir db-config :config_profile "linen/config-profiles")
-  (let [f (-> "linen/programs"
-              clojure.java.io/resource
-              clojure.java.io/file)
-        programs
-        (reduce
-          (fn go [programs f]
-            (if (.isDirectory f)
-              (clojure.set/union
-                programs
-                (reduce go programs (.listFiles f)))
-              (if-not (-> f .getName (.contains ".yaml"))
-                programs
-                (conj programs f))))
-          #{}
-          (.listFiles f))]
-    ;;(println programs) (System/exit 0)
-    (doseq [program programs]
-      (let [data (-> program slurp yaml/parse-string)
-            program-name (:name data)
-            documentation (:documentation data)
-            config-profiles (:config-profiles data)]
-        (try
-          (j/with-db-transaction [conn db-config]
-            (j/insert! conn :program
-              {:name program-name
-               :data data
-               :documentation documentation})
-            (log :info
-              (str "program " "\"" program-name "\" inserted."))
-            (doseq [cp config-profiles]
-              (j/insert! conn :config_profile_program_map
-                {:program program-name
-                 :config_profile cp})
-              (log :info
-                (str "config_profile_program_map "
-                     "\"" program-name "/" cp "\" inserted."))))
-          (catch org.postgresql.util.PSQLException psqle
-            (log :warn (str "source \""
-                            program-name
-                            "\" not inserted: " (.getMessage psqle)))
-            ))))))
+  (migrate-dir db-config :program "linen/programs"))
+
 
 (defn -main [host & [direction]]
   (if (= direction "down")
