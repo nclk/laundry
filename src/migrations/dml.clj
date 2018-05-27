@@ -69,25 +69,23 @@
 
 
 (defn program
-  [src [{name* :name
-         main :main
-         documentation :documentation} & body]]
+  [src name*]
   {:name name*
-   :main main
-   :documentation {:pg-json documentation}})
+   :src src})
 
 
-(defn module-dependency-list
-  [conn tree module]
-  (if-let [src (-> conn (j/query ["select src from module where name = ?" module])
+(defn dependency-list
+  [conn rel tree name*]
+  (if-let [src (-> conn (j/query [(str "select src from " (name rel) " where name = ?")
+                                  name*])
                         first :src)]
     (let [[_ & body] (linen/normalize-module (yaml/parse-all src))
           modules (->> (linen/harvest body :module)
                        (filter string?)
-                       (remove (set (conj tree module))))]
+                       (remove (set (conj tree name*))))]
       (if (empty? modules)
-        (conj tree module)
-        (reduce (partial module-dependency-list conn) (conj tree module) modules)))
+        (conj tree name*)
+        (reduce (partial dependency-list conn :module) (conj tree name*) modules)))
     tree))
 
 
@@ -107,21 +105,17 @@
                   contents (yaml/parse-all src)
                   [{name* :name} & _] contents]
               (if-not (= name* file-name)
-                (log :error (str "module not inserted: filename \""
+                (log :error (str (name rel) " not inserted: filename \""
                                  file-name
-                                 "\" does not match module name \""
+                                 "\" does not match " (name rel)  " name \""
                                  name* "\"."))
                 (j/with-db-transaction [conn db-config]
                   (j/insert! conn rel
                     (condp = rel
                       :module (module src contents)
-                      :program (program src contents)))
-
-                  (j/update! conn :module
-                     {:dependencies (module-dependency-list conn [] name*)}
-                     ["name = ?" name*])
-
+                      :program (program src name*)))
                   (log :info (str (name rel) " inserted \"" name* "\"."))
+
                   (when-let [metaf (->> metas (filter #(= (name-from-file % rel) name*)) first)]
                     (let [meta* (-> metaf slurp yaml/parse-string)]
                       (j/update! conn rel
@@ -140,7 +134,13 @@
 (defn migrate
   [db-config]
   (migrate-dir db-config :module "linen/modules")
-  (migrate-dir db-config :program "linen/programs"))
+  (migrate-dir db-config :program "linen/programs")
+  (doseq [rel [:module :program]]
+    (j/with-db-transaction [conn db-config]
+      (doseq [{name* :name} (j/query conn [(str "select name from " (name rel))])]
+        (j/update! conn rel
+           {:dependencies (dependency-list conn rel [] name*)}
+           ["name = ?" name*])))))
 
 
 (defn -main [host & [direction]]

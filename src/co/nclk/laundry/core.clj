@@ -96,9 +96,8 @@
     :related-resources {:test-runs
                         [(str api-base "/test-runs/?program_name=%s")
                          :name]
-                        :main
-                        [(str api-base "/modules/%s")
-                         :main]}
+                        :dependencies [(str api-base "/modules/?%s")
+                                       [:dependencies "name=%s" "&"]]}
     :filter-keys #{:name :main}
     :insert-keys #{:name :main :documentation}
     :update-keys #{:name :main :documentation}

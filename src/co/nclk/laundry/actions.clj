@@ -230,7 +230,8 @@
 
 (defn run [program main modules & [hkeys seed]]
   (let [seed (or seed (.getTime (java.util.Date.)))
-        config (merge (default-config seed hkeys program main modules) laundry-config)
+        default-config* (default-config seed hkeys program main modules)
+        config (merge default-config* (linen/evaluate laundry-config default-config*))
         test-run-id (java.util.UUID/randomUUID)]
 
     (println "Seed:" seed)

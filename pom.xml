@@ -3,7 +3,7 @@
   <groupId>co.nclk</groupId>
   <artifactId>laundry</artifactId>
   <packaging>jar</packaging>
-  <version>3.0.0-SNAPSHOT</version>
+  <version>4.0.0-SNAPSHOT</version>
   <name>laundry</name>
   <description>FIXME: write description</description>
   <url>http://example.com/FIXME</url>
@@ -14,7 +14,7 @@
     </license>
   </licenses>
   <scm>
-    <tag>39f2e5f115746e8b320abb31c60117a4fbe18cda</tag>
+    <tag>50dd8387c6fcc7340db8937903611c7e06fdd376</tag>
   </scm>
   <build>
     <sourceDirectory>src</sourceDirectory>
