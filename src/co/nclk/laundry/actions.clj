@@ -2,10 +2,9 @@
   (:require [clojure.java.jdbc :as j]
             [clj-yaml.core :as yaml]
             [cheshire.core :as json]
-            [clojure.tools.logging.impl :as logp]
-            [clojure.tools.logging :refer [log *logger-factory*]]
             [clojure.core.async :as a]
             [co.nclk.linen.core :as linen]
+            [co.nclk.linen.node :refer [log]]
             ;[co.nclk.linen.connector.http :refer [connector]]
             [co.nclk.linen.connector.handler :refer [connector]]
             [co.nclk.laundry.models.common :as models]
@@ -121,12 +120,35 @@
                :message (or message "[empty]")})))))))
 
 
-(defn get-logger-factory
-  [test-run-id]
-  (let [logger (get-logger test-run-id)]
-    (reify clojure.tools.logging.impl.LoggerFactory
-      (get-logger [self namesp] logger)
-      (name [self] "dblogger"))))
+(defn handle-checkpoint-started
+  [test-run-id checkpoint]
+  (when-let [runid (:runid checkpoint)]
+    (j/with-db-transaction [conn dbconfig]
+      (j/insert! conn :checkpoint
+            {:id runid
+             :test_run_id test-run-id
+             :success nil
+             :data checkpoint}))))
+
+
+(defn handle-checkpoint-finished
+  [test-run-id checkpoint]
+  (when-let [runid (:runid checkpoint)]
+    (j/with-db-transaction [conn dbconfig]
+      (j/update! conn :checkpoint
+        {:success (-> checkpoint :success :value true?)
+         :data checkpoint}
+        ["id = ?" runid]))))
+
+
+(defn handle-log-entry
+  [test-run-id level runid message]
+  (j/with-db-transaction [conn dbconfig]
+    (j/insert! conn :log_entry
+      {:test_run_id test-run-id
+       :runid runid
+       :level (name level)
+       :message (or message "[empty]")})))
 
 
 (defn log-run-exception!
@@ -138,13 +160,6 @@
            (clojure.pprint/pprint
              (.getStackTrace e))))
     (recur (.getCause e))))
-
-
-(defn do-run
-  [config]
-  (try (linen/run config)
-    (catch Exception e
-      (log-run-exception! e))))
 
 
 (defn harvest!
@@ -193,27 +208,29 @@
        :env env})))
 
 
-(defn run-with-logger
+(defn do-run
   [test-run-id config]
   (try
-    (let [lfactory (get-logger-factory test-run-id)]
-      (binding [*logger-factory* lfactory]
-        (let [return (do-run config)]
-          (harvest! config return test-run-id)
-          (process-checkpoints! return test-run-id config)
-          (raw-result! return test-run-id)
-          nil)))
-    (catch Exception ie
+    (let [return (linen/run config)]
+      (harvest! config return test-run-id)
+      (process-checkpoints! return test-run-id config)
+      (raw-result! return test-run-id)
+      nil)
+    (catch Exception e
       (test-status! "error" test-run-id)
-      (log-run-exception! ie))
+      (log-run-exception! e))
     (finally (remove-test! (str test-run-id)))))
 
 
 (defn default-config
-  [seed hkeys program main modules]
+  [test-run-id seed hkeys program main modules]
   {:env {}
    :runnable? (atom true)
    :effective (long seed)
+   :callbacks {:log (partial handle-log-entry test-run-id)
+               :checkpoint
+               {:started (partial handle-checkpoint-started test-run-id)
+                :finished (partial handle-checkpoint-finished test-run-id)}}
    :harvest (or hkeys [])
    :log-checkpoints? true
    :main (yaml/parse-all ((keyword main) modules))
@@ -229,10 +246,10 @@
 
 
 (defn run [program main modules & [hkeys seed]]
-  (let [seed (or seed (.getTime (java.util.Date.)))
-        default-config* (default-config seed hkeys program main modules)
-        config (merge default-config* (linen/evaluate laundry-config default-config*))
-        test-run-id (java.util.UUID/randomUUID)]
+  (let [test-run-id (java.util.UUID/randomUUID)
+        seed (or seed (.getTime (java.util.Date.)))
+        default-config* (default-config test-run-id seed hkeys program main modules)
+        config (merge default-config* (linen/evaluate laundry-config default-config*))]
 
     (println "Seed:" seed)
     (println "Evaluated environment:")
@@ -244,7 +261,7 @@
     (test-run! test-run-id seed (:name program) modules)
 
     (test-status! "pending" test-run-id)
-    (a/go (a/>! job-queue {:job #(run-with-logger test-run-id config)
+    (a/go (a/>! job-queue {:job #(do-run test-run-id config)
                            :config config
                            :test-run-id test-run-id}))
     test-run-id))
